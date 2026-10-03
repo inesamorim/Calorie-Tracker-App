@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F1E4F3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Nutri">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Nutri</title>
+<style>
+:root{--t:#0E3B43;--l:#F1E4F3;--s:#F2C57C;--g:#7EB09B;--p:#FE5D9F}
+*{box-sizing:border-box}
+body{margin:0;background:var(--l);color:var(--t);font:16px/1.4 ui-rounded,"SF Pro Rounded",system-ui,sans-serif}
+main{padding:calc(env(safe-area-inset-top) + 14px) 16px calc(92px + env(safe-area-inset-bottom));max-width:560px;margin:auto}
+h2{font-size:1.05rem;margin:20px 0 8px}
+input,select,button{font:inherit;color:var(--t);border:0;border-radius:12px;padding:11px 12px;background:#fff;width:100%;margin:4px 0}
+button{background:var(--t);color:var(--l);font-weight:600}
+button.ghost{background:transparent;color:var(--t);border:1.5px solid var(--t)}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.cards{display:flex;gap:8px;margin-top:8px}
+.card{flex:1;background:var(--s);border-radius:14px;padding:10px 12px;font-size:.85rem}
+.card b{display:block;font-size:1.6rem}
+.bar{background:#fff;border-radius:8px;height:12px;overflow:hidden}
+.bar i{display:block;height:100%}
+.note{font-size:.85rem;opacity:.75}
+details{background:#fff;border-radius:12px;padding:10px 12px;margin:6px 0}
+details button{margin-top:8px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--t);padding:8px 4px calc(8px + env(safe-area-inset-bottom))}
+nav button{background:none;color:var(--l);opacity:.6;font-size:.72rem;padding:6px 0;margin:0}
+nav button.on{opacity:1;color:var(--s)}
+svg{width:100%;height:auto;background:#fff;border-radius:12px}
+.res button{background:#fff;color:var(--t);text-align:left;font-weight:400}
+</style></head><body>
+<main id="v"></main><nav id="nav"></nav>
+<script>
+const KCAL='Valor Calórico',SKIP=['Alimento','Densidade Nutricional'];
+const ACT={'sedentary':1.2,'lightly active':1.375,'moderately active':1.55,'very active':1.725,'extra active':1.9};
+const FF=[['Valor Calórico','Calories (kcal)'],['Proteína','Protein (g)'],['Hidratos de Carbono','Carbs (g)'],['Gordura','Fat (g)'],['Fibra','Fiber (g)']];
+const TABS=[['today','Today'],['meal','Add meal'],['weight','Weight'],['foods','Foods'],['set','Settings']];
+const $=id=>document.getElementById(id),r0=x=>Math.round(x);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+const num=v=>v==null||v===''||isNaN(+v)?null:+v;
+const today=()=>new Date().toLocaleDateString('sv-SE');
+let S={foods:[],cols:[],meals:[],weights:[],prof:{gender:'male',age:25,height:175,peso:70,activity:'lightly active',deficit:400,tracked:{'Proteína':100,'Fibra':30}}};
+let tab='today',day=today(),items=[],sel=null,res=[];
+
+/* ---------- storage (IndexedDB, on this device only) ---------- */
+const idb=()=>new Promise((ok,no)=>{const r=indexedDB.open('nutri',1);r.onupgradeneeded=()=>r.result.createObjectStore('k');r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)});
+async function load(){try{const d=await idb();const v=await new Promise(ok=>{const q=d.transaction('k').objectStore('k').get('S');q.onsuccess=()=>ok(q.result);q.onerror=()=>ok(null)});if(v)Object.assign(S,v)}catch(e){}}
+async function save(){try{const d=await idb();d.transaction('k','readwrite').objectStore('k').put(S,'S')}catch(e){}}
+
+/* ---------- maths ---------- */
+const latestW=()=>S.weights.length?S.weights[S.weights.length-1].kg:S.prof.peso;
+function energy(){const p=S.prof,w=latestW();const bmr=10*w+6.25*p.height-5*p.age+(p.gender==='male'?5:-161);const tdee=bmr*ACT[p.activity];return{bmr,tdee,target:tdee-p.deficit}}
+const sum=(ms,k)=>ms.reduce((a,m)=>a+(m.tot[k]||0),0);
+const nutCols=()=>S.cols.filter(c=>!SKIP.includes(c)&&c!==KCAL);
+const ffc=()=>FF.filter(([c])=>S.cols.includes(c));
+
+/* ---------- csv import ---------- */
+function parseCSV(t){const h=t.split('\n')[0],d=(h.match(/;/g)||[]).length>(h.match(/,/g)||[]).length?';':',';
+ const rows=[];let r=[],f='',q=false;
+ for(let i=0;i<t.length;i++){const c=t[i];
+  if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+  else if(c==='"')q=true;else if(c===d){r.push(f);f=''}
+  else if(c==='\n'){r.push(f);rows.push(r);r=[];f=''}else if(c!=='\r')f+=c}
+ if(f||r.length){r.push(f);rows.push(r)}return rows}
+async function impCSV(file){if(!file)return;const b=await file.arrayBuffer();let t;
+ try{t=new TextDecoder('utf-8',{fatal:true}).decode(b)}catch(e){t=new TextDecoder('windows-1252').decode(b)}
+ const rows=parseCSV(t.replace(/^\uFEFF/,'')),head=rows[0].map(h=>h.trim()),seen=new Set(),foods=[];
+ for(const r of rows.slice(1)){if(r.length<2)continue;const o={};
+  head.forEach((h,i)=>{const v=h==='Alimento'?(r[i]||'').trim():num(String(r[i]??'').replace(',','.'));if(o[h]==null||o[h]==='')o[h]=v}); // repeated columns are merged
+  const k=norm(o.Alimento||'');if(!k||seen.has(k))continue;seen.add(k);foods.push(o)}
+ S.foods=foods;S.cols=[...new Set(head)];await save();render()}
+
+/* ---------- actions ---------- */
+function go(t){tab=t;render();scrollTo(0,0)}
+function search(v){const q=norm(v);res=q?S.foods.filter(f=>norm(f.Alimento).includes(q)).slice(0,25):[];
+ $('res').innerHTML=res.map((f,i)=>`<button onclick="pick(${i})">${esc(f.Alimento)} <small>${r0(f[KCAL]||0)} kcal/100 g</small></button>`).join('')}
+function pick(i){sel=res[i].Alimento;res=[];$('res').innerHTML='';$('q').value='';drawSel()}
+function drawSel(){$('sel').innerHTML=sel?`<div class=row><b style="flex:2;align-self:center">${esc(sel)}</b><input id=g type=number inputmode=decimal value=100><button onclick="addItem()">Add</button></div>`:''}
+function addItem(){const g=num($('g').value);if(!g||g<=0)return;items.push([sel,g]);sel=null;drawSel();drawCur()}
+function drawCur(){const rs=items.map(([n,g])=>{const f=S.foods.find(x=>x.Alimento===n);return[n,g,r0((f&&f[KCAL]||0)*g/100)]});
+ $('cur').innerHTML=rs.length?`<h2>This meal · ${rs.reduce((a,x)=>a+x[2],0)} kcal</h2>${rs.map(x=>`<div class=row style="margin:4px 0"><span style="flex:3">${esc(x[0])}</span><span>${x[1]} g</span><span>${x[2]} kcal</span></div>`).join('')}<div class=row><button onclick="saveMeal()">Save meal</button><button class=ghost onclick="items.pop();drawCur()">Remove last</button></div>`:''}
+function saveMeal(){if(!items.length)return;const tot={};
+ for(const [n,g] of items){const f=S.foods.find(x=>x.Alimento===n);for(const c of S.cols){if(SKIP.includes(c))continue;const v=f&&f[c];if(v!=null)tot[c]=(tot[c]||0)+v*g/100}}
+ const date=$('md').value||today();S.meals.push({id:Date.now(),date,name:$('mc').value.trim()||$('mn').value,items:items.slice(),tot});
+ items=[];day=date;save();go('today')}
+function delMeal(id){S.meals=S.meals.filter(m=>m.id!==id);save();render()}
+function saveW(){const kg=num($('kg').value),d=$('wd').value||today();if(!kg)return;
+ S.weights=S.weights.filter(p=>p.date!==d).concat({date:d,kg}).sort((a,b)=>a.date<b.date?-1:1);save();render()}
+function addFood(){const name=$('fn').value.trim();if(!name)return;
+ if(S.foods.some(f=>norm(f.Alimento)===norm(name)))return alert('That food already exists.');
+ const o={};S.cols.forEach(c=>o[c]=null);o.Alimento=name;ffc().forEach(([c],i)=>o[c]=num($('ff'+i).value));
+ S.foods.push(o);save();alert('Food added.');render()}
+function setP(k,v){S.prof[k]=['gender','activity'].includes(k)?v:num(v)??S.prof[k];save();render()}
+const tk=()=>Object.keys(S.prof.tracked);
+function goal(i,v){S.prof.tracked[tk()[i]]=num(v)||0;save();render()}
+function rmT(i){delete S.prof.tracked[tk()[i]];save();render()}
+function addT(k){if(k){S.prof.tracked[k]=50;save();render()}}
+async function exp(){const f=new File([JSON.stringify(S)],'nutri-backup.json',{type:'application/json'});
+ if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]})}catch(e){}return}
+ const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;a.click()}
+async function impBackup(file){if(!file)return;try{Object.assign(S,JSON.parse(await file.text()));await save();render()}catch(e){alert('Invalid backup file.')}}
+
+/* ---------- charts (inline SVG) ---------- */
+function week(t){const days=[...Array(7)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()-6+i);return d.toLocaleDateString('sv-SE')});
+ const v=days.map(d=>sum(S.meals.filter(m=>m.date===d),KCAL)),mx=Math.max(t,...v,1)*1.1,y=x=>120-x/mx*110;
+ return `<svg viewBox="0 0 320 150">${v.map((x,i)=>`<rect x="${i*45+8}" y="${y(x)}" width="40" height="${x/mx*110}" rx="6" fill="${x>t?'#FE5D9F':'#7EB09B'}"/><text x="${i*45+28}" y="140" text-anchor="middle" font-size="10" fill="#0E3B43">${days[i].slice(8)}</text>`).join('')}<line x1="0" x2="320" y1="${y(t)}" y2="${y(t)}" stroke="#0E3B43" stroke-dasharray="4 4"/></svg>`}
+function wchart(){const w=S.weights;if(!w.length)return'<p class=note>No weights yet.</p>';
+ const xs=w.map(p=>+new Date(p.date)),ys=w.map(p=>p.kg),x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys)-.5,y1=Math.max(...ys)+.5;
+ const X=t=>x1===x0?160:36+(t-x0)/(x1-x0)*270,Y=v=>120-(v-y0)/(y1-y0)*100,tx='font-size="10" fill="#0E3B43"';
+ return `<svg viewBox="0 0 320 150"><polyline fill="none" stroke="#0E3B43" stroke-width="2" points="${xs.map((x,i)=>X(x)+','+Y(ys[i])).join(' ')}"/>${xs.map((x,i)=>`<circle cx="${X(x)}" cy="${Y(ys[i])}" r="4" fill="#FE5D9F"/>`).join('')}<text x="2" y="24" ${tx}>${y1.toFixed(1)}</text><text x="2" y="120" ${tx}>${y0.toFixed(1)}</text><text x="36" y="142" ${tx}>${w[0].date.slice(5)}</text><text x="306" y="142" text-anchor="end" ${tx}>${w[w.length-1].date.slice(5)}</text></svg><p class=note>Since ${w[0].date}: ${(ys[ys.length-1]-ys[0]>=0?'+':'')+(ys[ys.length-1]-ys[0]).toFixed(1)} kg</p>`}
+
+/* ---------- views ---------- */
+const card=(l,v)=>`<div class=card>${l}<b>${r0(v)}</b></div>`;
+const bar=(l,v,t)=>{const p=t?v/t:0;return`<div style="margin-top:8px">${esc(l)}: <b>${r0(v)}</b> / ${r0(t)}</div><div class=bar><i style="width:${Math.min(p,1)*100}%;background:${p>1?'var(--p)':'var(--g)'}"></i></div>`};
+const opt=(l,c)=>l.map(x=>`<option${x===c?' selected':''}>${x}</option>`).join('');
+const views={
+today(){const e=energy(),ms=S.meals.filter(m=>m.date===day),eat=sum(ms,KCAL),left=e.target-eat;
+ return `<input type=date value="${day}" onchange="day=this.value||today();render()">
+ <div class=cards>${card('Target',e.target)}${card('Eaten',eat)}${card(left>=0?'Left':'Over',Math.abs(left))}</div>
+ ${bar('kcal',eat,e.target)}${e.target<e.bmr?'<p class=note>Target is below your BMR. Consider a smaller deficit.</p>':''}
+ ${Object.entries(S.prof.tracked).map(([k,g])=>bar(k,sum(ms,k),g)).join('')}
+ <h2>Meals</h2>${ms.map(m=>`<details><summary>${esc(m.name)} · ${r0(m.tot[KCAL]||0)} kcal</summary>${m.items.map(([n,g])=>`<div>${esc(n)}: ${g} g</div>`).join('')}<button class=ghost onclick="delMeal(${m.id})">Delete meal</button></details>`).join('')||'<p class=note>Nothing logged for this day.</p>'}
+ <h2>Last 7 days</h2>${week(e.target)}`},
+meal(){return `<div class=row><select id=mn>${opt(['Pequeno-almoço','Almoço','Lanche','Jantar','Ceia'])}</select><input type=date id=md value="${day}"></div>
+ <input id=mc placeholder="Custom name (optional)"><input id=q placeholder="Search a food…" oninput="search(this.value)" autocomplete=off>
+ <div id=res class=res></div><div id=sel></div><div id=cur></div>`},
+weight(){return `<div class=row><input id=kg type=number inputmode=decimal step=0.1 value="${latestW()}"><input id=wd type=date value="${today()}"></div><button onclick="saveW()">Save weight</button><h2>Weight over time</h2>${wchart()}`},
+foods(){return `<p class=note>Values per 100 g. Only the name is required. ${S.foods.length} foods stored.</p><input id=fn placeholder="Food name">${ffc().map(([c,l],i)=>`<input id=ff${i} type=number inputmode=decimal placeholder="${l}">`).join('')}<button onclick="addFood()">Add food</button>`},
+set(){const p=S.prof,e=energy();return `<div class=row><select onchange="setP('gender',this.value)">${opt(['male','female'],p.gender)}</select><select onchange="setP('activity',this.value)">${opt(Object.keys(ACT),p.activity)}</select></div>
+ <div class=row><input type=number value="${p.age}" onchange="setP('age',this.value)" aria-label=Age><input type=number value="${p.height}" onchange="setP('height',this.value)" aria-label="Height cm"></div>
+ <div class=row><input type=number step=0.1 value="${p.peso}" onchange="setP('peso',this.value)" aria-label="Weight if none logged"><input type=number step=50 value="${p.deficit}" onchange="setP('deficit',this.value)" aria-label="Daily deficit"></div>
+ <p class=note>Age · height (cm) · weight if none logged (kg) · daily deficit (kcal)<br>BMR ${r0(e.bmr)} · TDEE ${r0(e.tdee)} · Target ${r0(e.target)} kcal</p>
+ <h2>Tracked nutrients (daily goal)</h2>${tk().map((k,i)=>`<div class=row><span style="flex:2;align-self:center">${esc(k)}</span><input type=number value="${p.tracked[k]}" onchange="goal(${i},this.value)"><button class=ghost style="flex:.4" onclick="rmT(${i})">✕</button></div>`).join('')}
+ <select onchange="addT(this.value)"><option value="">Add nutrient…</option>${nutCols().filter(c=>!(c in p.tracked)).map(c=>`<option>${esc(c)}</option>`).join('')}</select>
+ <h2>Data (stored only on this device)</h2><p class=note>Re-import the CSV to replace the food list. Meals and weights are kept.</p>
+ <label class=note>Food CSV</label><input type=file accept=".csv,text/csv" onchange="impCSV(this.files[0])">
+ <button onclick="exp()">Export backup</button><label class=note>Restore backup</label><input type=file accept=".json,application/json" onchange="impBackup(this.files[0])">`}};
+
+function render(){
+ $('nav').innerHTML=TABS.map(([k,l])=>`<button class="${k===tab?'on':''}" onclick="go('${k}')">${l}</button>`).join('');
+ $('v').innerHTML=(!S.foods.length&&tab!=='set')?`<h2>Welcome</h2><p>Import your food CSV (FOOD-DATA-FINAL-PT.csv). It stays on this device.</p><input type=file accept=".csv,text/csv" onchange="impCSV(this.files[0])"><p class=note>Already have a backup?</p><input type=file accept=".json,application/json" onchange="impBackup(this.files[0])">`:views[tab]();
+ if(tab==='meal'&&S.foods.length){drawSel();drawCur()}}
+load().then(()=>{render();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+</script></body></html>
