@@ -100,9 +100,13 @@ const tk=()=>Object.keys(S.prof.tracked);
 function goal(i,v){S.prof.tracked[tk()[i]]=num(v)||0;save();render()}
 function rmT(i){delete S.prof.tracked[tk()[i]];save();render()}
 function addT(k){if(k){S.prof.tracked[k]=50;save();render()}}
-async function shareFile(name,text,type){const f=new File([text],name,{type});
- if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]})}catch(e){}return}
- const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=name;a.click()}
+async function shareFile(name,text,type){
+ try{const f=new File([text],name,{type:name.endsWith('.json')?'text/plain':type}); // iOS rejects application/json in the share sheet
+  if(navigator.maxTouchPoints>1&&navigator.canShare&&navigator.canShare({files:[f]})){
+   try{await navigator.share({files:[f]});return}catch(e){if(e.name==='AbortError')return}}
+  const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=name;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),10000)
+ }catch(e){alert('Export failed: '+(e&&e.message||e))}}
 const csvq=v=>{v=v==null?'':String(v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
 const toCSV=(cols,rows)=>[cols.map(csvq).join(','),...rows.map(r=>cols.map(c=>csvq(r[c])).join(','))].join('\n');
 const exp=()=>shareFile('nutri-backup.json',JSON.stringify(S),'application/json');
