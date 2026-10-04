@@ -100,9 +100,15 @@ const tk=()=>Object.keys(S.prof.tracked);
 function goal(i,v){S.prof.tracked[tk()[i]]=num(v)||0;save();render()}
 function rmT(i){delete S.prof.tracked[tk()[i]];save();render()}
 function addT(k){if(k){S.prof.tracked[k]=50;save();render()}}
-async function exp(){const f=new File([JSON.stringify(S)],'nutri-backup.json',{type:'application/json'});
+async function shareFile(name,text,type){const f=new File([text],name,{type});
  if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]})}catch(e){}return}
- const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;a.click()}
+ const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=name;a.click()}
+const csvq=v=>{v=v==null?'':String(v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+const toCSV=(cols,rows)=>[cols.map(csvq).join(','),...rows.map(r=>cols.map(c=>csvq(r[c])).join(','))].join('\n');
+const exp=()=>shareFile('nutri-backup.json',JSON.stringify(S),'application/json');
+const expFoods=()=>shareFile('foods.csv',toCSV(S.cols,S.foods),'text/csv');
+function expMeals(){const cols=S.cols.filter(c=>!SKIP.includes(c)); // same layout as refeicoes.csv in the Python code
+ shareFile('refeicoes.csv',toCSV(['Data','Nome da refeição','Alimentos',...cols],S.meals.map(m=>({...m.tot,'Data':m.date,'Nome da refeição':m.name,'Alimentos':JSON.stringify(m.items)}))),'text/csv')}
 async function impBackup(file){if(!file)return;try{Object.assign(S,JSON.parse(await file.text()));await save();render()}catch(e){alert('Invalid backup file.')}}
 
 /* ---------- charts (inline SVG) ---------- */
@@ -139,7 +145,7 @@ set(){const p=S.prof,e=energy();return `<div class=row><select onchange="setP('g
  <select onchange="addT(this.value)"><option value="">Add nutrient…</option>${nutCols().filter(c=>!(c in p.tracked)).map(c=>`<option>${esc(c)}</option>`).join('')}</select>
  <h2>Data (stored only on this device)</h2><p class=note>Re-import the CSV to replace the food list. Meals and weights are kept.</p>
  <label class=note>Food CSV</label><input type=file accept=".csv,text/csv" onchange="impCSV(this.files[0])">
- <button onclick="exp()">Export backup</button><label class=note>Restore backup</label><input type=file accept=".json,application/json" onchange="impBackup(this.files[0])">`}};
+ <h2>Export</h2><button onclick="expFoods()">Export foods (CSV)</button><button onclick="expMeals()">Export meals (CSV)</button><button class=ghost onclick="exp()">Full backup (JSON)</button><label class=note>Restore backup</label><input type=file accept=".json,application/json" onchange="impBackup(this.files[0])">`}};
 
 function render(){
  $('nav').innerHTML=TABS.map(([k,l])=>`<button class="${k===tab?'on':''}" onclick="go('${k}')">${l}</button>`).join('');
