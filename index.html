@@ -2,7 +2,7 @@
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#F1E4F3">
+<meta name="theme-color" content="#fcefef">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Nutri">
@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <title>Nutri</title>
 <style>
-:root{--t:#0E3B43;--l:#F1E4F3;--s:#F2C57C;--g:#7EB09B;--p:#FE5D9F}
+:root{--t:#1D3D36;--l:#fcefef;--s:#fcd29f;--g:#7fd8be;--p:#fcab64;--a:#a1fcdf}
 *{box-sizing:border-box}
 body{margin:0;background:var(--l);color:var(--t);font:16px/1.4 ui-rounded,"SF Pro Rounded",system-ui,sans-serif}
 main{padding:calc(env(safe-area-inset-top) + 14px) 16px calc(92px + env(safe-area-inset-bottom));max-width:560px;margin:auto}
@@ -29,7 +29,7 @@ details{background:#fff;border-radius:12px;padding:10px 12px;margin:6px 0}
 details button{margin-top:8px}
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--t);padding:8px 4px calc(8px + env(safe-area-inset-bottom))}
 nav button{background:none;color:var(--l);opacity:.6;font-size:.72rem;padding:6px 0;margin:0}
-nav button.on{opacity:1;color:var(--s)}
+nav button.on{opacity:1;color:var(--a)}
 svg{width:100%;height:auto;background:#fff;border-radius:12px}
 .res button{background:#fff;color:var(--t);text-align:left;font-weight:400}
 </style></head><body>
@@ -44,6 +44,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 const num=v=>v==null||v===''||isNaN(+v)?null:+v;
 const today=()=>new Date().toLocaleDateString('sv-SE');
+const SRC='<p class=note style="margin-top:28px">Fonte dos alimentos: Base de Dados da Composição de Alimentos. Instituto Nacional de Saúde Doutor Ricardo Jorge, I. P. - INSA. v 7.1 - 2026.</p>';
 let S={foods:[],cols:[],meals:[],weights:[],prof:{gender:'male',age:25,height:175,peso:70,activity:'lightly active',deficit:400,tracked:{'Proteína':100,'Fibra':30}}};
 let tab='today',day=today(),items=[],sel=null,res=[];
 
@@ -118,11 +119,11 @@ async function impBackup(file){if(!file)return;try{Object.assign(S,JSON.parse(aw
 /* ---------- charts (inline SVG) ---------- */
 function week(t){const days=[...Array(7)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()-6+i);return d.toLocaleDateString('sv-SE')});
  const v=days.map(d=>sum(S.meals.filter(m=>m.date===d),KCAL)),mx=Math.max(t,...v,1)*1.1,y=x=>120-x/mx*110;
- return `<svg viewBox="0 0 320 150">${v.map((x,i)=>`<rect x="${i*45+8}" y="${y(x)}" width="40" height="${x/mx*110}" rx="6" fill="${x>t?'#FE5D9F':'#7EB09B'}"/><text x="${i*45+28}" y="140" text-anchor="middle" font-size="10" fill="#0E3B43">${days[i].slice(8)}</text>`).join('')}<line x1="0" x2="320" y1="${y(t)}" y2="${y(t)}" stroke="#0E3B43" stroke-dasharray="4 4"/></svg>`}
+ return `<svg viewBox="0 0 320 150">${v.map((x,i)=>`<rect x="${i*45+8}" y="${y(x)}" width="40" height="${x/mx*110}" rx="6" fill="${x>t?'#fcab64':'#7fd8be'}"/><text x="${i*45+28}" y="140" text-anchor="middle" font-size="10" fill="#1D3D36">${days[i].slice(8)}</text>`).join('')}<line x1="0" x2="320" y1="${y(t)}" y2="${y(t)}" stroke="#1D3D36" stroke-dasharray="4 4"/></svg>`}
 function wchart(){const w=S.weights;if(!w.length)return'<p class=note>No weights yet.</p>';
  const xs=w.map(p=>+new Date(p.date)),ys=w.map(p=>p.kg),x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys)-.5,y1=Math.max(...ys)+.5;
- const X=t=>x1===x0?160:36+(t-x0)/(x1-x0)*270,Y=v=>120-(v-y0)/(y1-y0)*100,tx='font-size="10" fill="#0E3B43"';
- return `<svg viewBox="0 0 320 150"><polyline fill="none" stroke="#0E3B43" stroke-width="2" points="${xs.map((x,i)=>X(x)+','+Y(ys[i])).join(' ')}"/>${xs.map((x,i)=>`<circle cx="${X(x)}" cy="${Y(ys[i])}" r="4" fill="#FE5D9F"/>`).join('')}<text x="2" y="24" ${tx}>${y1.toFixed(1)}</text><text x="2" y="120" ${tx}>${y0.toFixed(1)}</text><text x="36" y="142" ${tx}>${w[0].date.slice(5)}</text><text x="306" y="142" text-anchor="end" ${tx}>${w[w.length-1].date.slice(5)}</text></svg><p class=note>Since ${w[0].date}: ${(ys[ys.length-1]-ys[0]>=0?'+':'')+(ys[ys.length-1]-ys[0]).toFixed(1)} kg</p>`}
+ const X=t=>x1===x0?160:36+(t-x0)/(x1-x0)*270,Y=v=>120-(v-y0)/(y1-y0)*100,tx='font-size="10" fill="#1D3D36"';
+ return `<svg viewBox="0 0 320 150"><polyline fill="none" stroke="#1D3D36" stroke-width="2" points="${xs.map((x,i)=>X(x)+','+Y(ys[i])).join(' ')}"/>${xs.map((x,i)=>`<circle cx="${X(x)}" cy="${Y(ys[i])}" r="4" fill="#fcab64"/>`).join('')}<text x="2" y="24" ${tx}>${y1.toFixed(1)}</text><text x="2" y="120" ${tx}>${y0.toFixed(1)}</text><text x="36" y="142" ${tx}>${w[0].date.slice(5)}</text><text x="306" y="142" text-anchor="end" ${tx}>${w[w.length-1].date.slice(5)}</text></svg><p class=note>Since ${w[0].date}: ${(ys[ys.length-1]-ys[0]>=0?'+':'')+(ys[ys.length-1]-ys[0]).toFixed(1)} kg</p>`}
 
 /* ---------- views ---------- */
 const card=(l,v)=>`<div class=card>${l}<b>${r0(v)}</b></div>`;
@@ -153,7 +154,7 @@ set(){const p=S.prof,e=energy();return `<div class=row><select onchange="setP('g
 
 function render(){
  $('nav').innerHTML=TABS.map(([k,l])=>`<button class="${k===tab?'on':''}" onclick="go('${k}')">${l}</button>`).join('');
- $('v').innerHTML=(!S.foods.length&&tab!=='set')?`<h2>Welcome</h2><p>Import your food CSV (FOOD-DATA-FINAL-PT.csv). It stays on this device.</p><input type=file accept=".csv,text/csv" onchange="impCSV(this.files[0])"><p class=note>Already have a backup?</p><input type=file accept=".json,application/json" onchange="impBackup(this.files[0])">`:views[tab]();
+ $('v').innerHTML=((!S.foods.length&&tab!=='set')?`<h2>Welcome</h2><p>Import your food CSV (FOOD-DATA-FINAL-PT.csv). It stays on this device.</p><input type=file accept=".csv,text/csv" onchange="impCSV(this.files[0])"><p class=note>Already have a backup?</p><input type=file accept=".json,application/json" onchange="impBackup(this.files[0])">`:views[tab]())+SRC;
  if(tab==='meal'&&S.foods.length){drawSel();drawCur()}}
 load().then(()=>{render();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()});
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
