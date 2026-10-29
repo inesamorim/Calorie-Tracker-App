@@ -125,6 +125,15 @@ function wchart(){const w=S.weights;if(!w.length)return'<p class=note>No weights
  const X=t=>x1===x0?160:36+(t-x0)/(x1-x0)*270,Y=v=>120-(v-y0)/(y1-y0)*100,tx='font-size="10" fill="#1D3D36"';
  return `<svg viewBox="0 0 320 150"><polyline fill="none" stroke="#1D3D36" stroke-width="2" points="${xs.map((x,i)=>X(x)+','+Y(ys[i])).join(' ')}"/>${xs.map((x,i)=>`<circle cx="${X(x)}" cy="${Y(ys[i])}" r="4" fill="#fcab64"/>`).join('')}<text x="2" y="24" ${tx}>${y1.toFixed(1)}</text><text x="2" y="120" ${tx}>${y0.toFixed(1)}</text><text x="36" y="142" ${tx}>${w[0].date.slice(5)}</text><text x="306" y="142" text-anchor="end" ${tx}>${w[w.length-1].date.slice(5)}</text></svg><p class=note>Since ${w[0].date}: ${(ys[ys.length-1]-ys[0]>=0?'+':'')+(ys[ys.length-1]-ys[0]).toFixed(1)} kg</p>`}
 
+function perWeek(w){if(w.length<2)return null;const d=(new Date(w[w.length-1].date)-new Date(w[0].date))/864e5;return d<7?null:(w[0].kg-w[w.length-1].kg)/(d/7)}
+function wCards(){const w=S.weights,rec=w.length?w.filter(p=>new Date(p.date)>=new Date(w[w.length-1].date)-28*864e5):[];
+ const c=(v,sub)=>`<div class=card>${v==null?'Per week':v>=0?'Lost / week':'Gained / week'}<b>${v==null?'—':Math.abs(v).toFixed(2)+' kg'}</b>${v==null?'needs 7+ days of data':sub}</div>`;
+ return c(perWeek(w),'since first entry')+c(perWeek(rec),'last 4 weeks')}
+const PAL=['#7fd8be','#fcab64','#a1fcdf','#fcd29f','#4cae92','#e58a3f','#1D3D36'];
+function macroChart(ms){const e=Object.entries(S.prof.tracked).filter(([k,g])=>g>0);if(!e.length)return'';
+ const rows=e.map(([k,g],i)=>({k,v:sum(ms,k),g,p:sum(ms,k)/g*100,c:PAL[i%PAL.length]})),mx=Math.max(100,...rows.map(r=>r.p))*1.05,W=140,x0=105,h=rows.length*28+8,tx='font-size="10" fill="#1D3D36"',lx=x0+100/mx*W;
+ return `<h2>Macros vs goal</h2><svg viewBox="0 0 320 ${h}">${rows.map((r,i)=>`<text x="6" y="${i*28+22}" ${tx}>${esc(r.k.length>15?r.k.slice(0,14)+'…':r.k)}</text><rect x="${x0}" y="${i*28+10}" width="${r.p/mx*W}" height="16" rx="5" fill="${r.c}" stroke="#1D3D36" stroke-opacity=".2"/><text x="314" y="${i*28+22}" text-anchor="end" ${tx}>${r0(r.v)}/${r0(r.g)}</text>`).join('')}<line x1="${lx}" x2="${lx}" y1="2" y2="${h-2}" stroke="#1D3D36" stroke-dasharray="4 4"/></svg><p class=note>Bar length = % of each daily goal. Dashed line = 100%.</p>`}
+
 /* ---------- views ---------- */
 const card=(l,v)=>`<div class=card>${l}<b>${r0(v)}</b></div>`;
 const bar=(l,v,t)=>{const p=t?v/t:0;return`<div style="margin-top:8px">${esc(l)}: <b>${r0(v)}</b> / ${r0(t)}</div><div class=bar><i style="width:${Math.min(p,1)*100}%;background:${p>1?'var(--p)':'var(--g)'}"></i></div>`};
@@ -135,12 +144,13 @@ today(){const e=energy(),ms=S.meals.filter(m=>m.date===day),eat=sum(ms,KCAL),lef
  <div class=cards>${card('Target',e.target)}${card('Eaten',eat)}${card(left>=0?'Left':'Over',Math.abs(left))}</div>
  ${bar('kcal',eat,e.target)}${e.target<e.bmr?'<p class=note>Target is below your BMR. Consider a smaller deficit.</p>':''}
  ${Object.entries(S.prof.tracked).map(([k,g])=>bar(k,sum(ms,k),g)).join('')}
+ ${macroChart(ms)}
  <h2>Meals</h2>${ms.map(m=>`<details><summary>${esc(m.name)} · ${r0(m.tot[KCAL]||0)} kcal</summary>${m.items.map(([n,g])=>`<div>${esc(n)}: ${g} g</div>`).join('')}<button class=ghost onclick="delMeal(${m.id})">Delete meal</button></details>`).join('')||'<p class=note>Nothing logged for this day.</p>'}
  <h2>Last 7 days</h2>${week(e.target)}`},
 meal(){return `<div class=row><select id=mn>${opt(['Pequeno-almoço','Almoço','Lanche','Jantar','Ceia'])}</select><input type=date id=md value="${day}"></div>
  <input id=mc placeholder="Custom name (optional)"><input id=q placeholder="Search a food…" oninput="search(this.value)" autocomplete=off>
  <div id=res class=res></div><div id=sel></div><div id=cur></div>`},
-weight(){return `<div class=row><input id=kg type=number inputmode=decimal step=0.1 value="${latestW()}"><input id=wd type=date value="${today()}"></div><button onclick="saveW()">Save weight</button><h2>Weight over time</h2>${wchart()}`},
+weight(){return `<div class=row><input id=kg type=number inputmode=decimal step=0.1 value="${latestW()}"><input id=wd type=date value="${today()}"></div><button onclick="saveW()">Save weight</button><div class=cards>${wCards()}</div><h2>Weight over time</h2>${wchart()}`},
 foods(){return `<p class=note>Values per 100 g. Only the name is required. ${S.foods.length} foods stored.</p><input id=fn placeholder="Food name">${ffc().map(([c,l],i)=>`<input id=ff${i} type=number inputmode=decimal placeholder="${l}">`).join('')}<button onclick="addFood()">Add food</button>`},
 set(){const p=S.prof,e=energy();return `<div class=row><select onchange="setP('gender',this.value)">${opt(['male','female'],p.gender)}</select><select onchange="setP('activity',this.value)">${opt(Object.keys(ACT),p.activity)}</select></div>
  <div class=row><input type=number value="${p.age}" onchange="setP('age',this.value)" aria-label=Age><input type=number value="${p.height}" onchange="setP('height',this.value)" aria-label="Height cm"></div>
